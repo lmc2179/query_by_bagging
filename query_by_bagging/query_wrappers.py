@@ -1,12 +1,13 @@
 from sklearn.datasets import make_blobs
-from sklearn.ensemble import BaggingClassifier, RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import BaggingClassifier, RandomForestClassifier, BaggingRegressor
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.svm import LinearSVC
 from sklearn.tree import DecisionTreeClassifier
 from collections import Counter
 from matplotlib import pyplot as plt
 import seaborn as sns
 import numpy as np
+from histogram_entropy import multiple_histogram_entropy
 
 class AbstractQuery(object):
     def __init__(self, ensemble):
@@ -64,6 +65,19 @@ class BinaryClassifierQuery(ClassifierQuery):
     def _entropy(self, p):
         return sum(- p * np.log(p))
 
+class RegressionQuery(AbstractQuery):
+    def score(self, X):
+        prediction_matrix = self._get_ensemble_predictions(X)
+        return multiple_histogram_entropy(prediction_matrix, nbins=100)
+
+    def _get_ensemble_predictions(self, X):
+        # Produce a result matrix where each input row corresponds to a row of hard-margin predictions
+        predictions = [m.predict(X) for m in self.ensemble_models]
+        return np.vstack(predictions).T
+
+    def rank(self, X):
+        raise NotImplementedError
+
 def demo_overlap():
     # This is an example of the "extrapolation paradox" - we intuitively expect more uncertainty outside the sampling region, but we are _very_ certain outside it instead
     X, y = np.concatenate([np.random.normal(1, 1, 20), np.random.normal(2, 1, 20)]).reshape(-1, 1), [0] * 20 + [1] * 20
@@ -76,17 +90,28 @@ def demo_overlap():
     scores = bc.score(X)
     # scores = bc.score_proba(X)
     print(scores)
-    sns.distplot(X[0:, ][:20], color='red')
-    sns.distplot(X[0:, ][20:], color='green')
+    sns.distplot(X[0:,][:20], color='red')
+    sns.distplot(X[0:,][20:], color='green')
     plt.show()
     plt.scatter(X[:, 0], scores)
     plt.show()
 
 
 def demo_regression():
-    pass
+    X = np.random.normal(1, 1, 20)
+    y = 2*X + 1 + np.random.normal(1, 1, 20)
+    X_t = X.reshape(-1, 1)
+    m = BaggingRegressor(LinearRegression(), n_estimators=1000)
+    # m = RandomForestClassifier(n_estimators=1000)
+    m.fit(X_t, y)
 
+    bc = RegressionQuery(m)
+    scores = bc.score(X_t)
+    plt.scatter(X, y)
+    plt.show()
+    plt.scatter(X, scores)
+    plt.show()
 
 if __name__ == '__main__':
-    demo_overlap()
-    # demo_regression()
+    # demo_overlap()
+    demo_regression()
